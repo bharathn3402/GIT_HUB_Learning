@@ -1,17 +1,14 @@
-import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QStackedWidget, QPushButton, QComboBox, QLabel, QMessageBox, QFormLayout
 from PyQt5.QtGui import QFont,QIcon,QPixmap,QPainter, QColor
 from PyQt5.QtCore import Qt
 import os.path
 
 
+import sys
 import serial
 import serial.tools.list_ports
 import time
 from intelhex import IntelHex
-
-arduinoTimeOut = 10     # Value in seconds, None for infinite wait
-
 
 
 class HexFileSelectionWindow(QWidget):
@@ -81,9 +78,12 @@ class HexFileSelectionWindow(QWidget):
             return
 
         selectedHexFile = self.fileComboBox.itemText(selectedHexIndex)
+
         self.main_window.selectedHexFile = selectedHexFile  # Store the selected hex file name
 
         print("Selected HEX File:", selectedHexFile)
+        
+
 
     def refreshHexFiles(self):
         self.populateHexFiles()
@@ -117,10 +117,10 @@ class COMPortSelectionWindow(QWidget):
         mainLayout = QVBoxLayout()
 
         comLayout = QHBoxLayout()
-        comLabel = QLabel("Select a COM Port:")
+        comLabel = QLabel(" Select a COM Port :")
         comLabel.setStyleSheet("font-size: 16px; font-weight: bold;")
         comLayout.addWidget(comLabel)
-        comLayout.setContentsMargins(100,10,150,10)
+        comLayout.setContentsMargins(100, 50, 150, 0)  # Adjust the bottom margin to a smaller value
 
         self.comComboBox = QComboBox()
         self.comComboBox.setStyleSheet("font-size: 14px;")
@@ -128,6 +128,15 @@ class COMPortSelectionWindow(QWidget):
         comLayout.addWidget(self.comComboBox)
 
         mainLayout.addLayout(comLayout)
+
+        baudLayout = QHBoxLayout()
+        baudLabel = QLabel("Selected Baud Rate:    115200")
+        baudLabel.setStyleSheet("font-size: 16px; font-weight: bold;")
+        baudLayout.addWidget(baudLabel)
+        baudLayout.setContentsMargins(100, -50, 150, 100)  # Remove the bottom margin
+
+        mainLayout.addSpacing(5)  # Add a small spacing between the two lines
+        mainLayout.addLayout(baudLayout)
 
         buttonLayout = QHBoxLayout()
 
@@ -173,8 +182,8 @@ class COMPortSelectionWindow(QWidget):
             QMessageBox.warning(self, "No Port Selected", "Please select a COM port.")
             return
 
-        selectedPort = self.comComboBox.itemText(selectedCOMIndex)
-        # selectedPort= self.com_ports[selectedCOMIndex].device
+        # selectedPort = self.comComboBox.itemText(selectedCOMIndex)
+        selectedPort= self.com_ports[selectedCOMIndex].device
 
         print("Selected COM Port:", selectedPort)
 
@@ -222,6 +231,7 @@ class SerialSetupWindow(QWidget):
         formLayout = QFormLayout()
 
         hexFileLabel = QLabel("Selected HEX File:")
+
         self.hexFileValueLabel = QLabel(self.main_window.selectedHexFile)
         formLayout.addRow(hexFileLabel, self.hexFileValueLabel)
 
@@ -229,13 +239,9 @@ class SerialSetupWindow(QWidget):
         self.comPortValueLabel = QLabel(self.main_window.selectedCOMPort)
         formLayout.addRow(comPortLabel, self.comPortValueLabel)
 
-        baudRateLabel = QLabel("Baud Rate:")
-        self.baudRateComboBox = QComboBox()
-        self.baudRateComboBox.setStyleSheet("font-size: 14px;")
-        self.baudRateComboBox.setFixedWidth(200)
-        self.baudRateComboBox.addItems(["9600", "115200"])  # Add available baud rates
-        self.baudRateComboBox.setCurrentIndex(-1)
-        formLayout.addRow(baudRateLabel, self.baudRateComboBox)
+        baudRateLabel = QLabel("Selected Baud Rate:")
+        self.baudRatevalueLabel = QLabel("115200")
+        formLayout.addRow(baudRateLabel, self.baudRatevalueLabel)
 
         mainLayout.addLayout(formLayout)
 
@@ -260,56 +266,212 @@ class SerialSetupWindow(QWidget):
         self.setLayout(mainLayout)
 
     def startSerialComm(self):
-        baudRateIndex = self.baudRateComboBox.currentIndex()
-        if baudRateIndex == -1:
-            QMessageBox.warning(self, "No Baud Rate Selected", "Please select a baud rate.")
-            return
+        
 
-        selectedBaudRate = self.baudRateComboBox.itemText(baudRateIndex)
+        selectedBaudRate = 115200
 
         print("Selected Baud Rate:", selectedBaudRate)
-
         self.main_window.selectedBaudRate = selectedBaudRate  # Store the selected baud rate
-        self.main_window.serialArduino=self.setupSerialComm(
-            COMport=self.main_window.selectedCOMPort,
-            baudRate=self.main_window.selectedBaudRate,
-            timeOut=10
-        )
         
-        self.main_window.close()
+        targetArduino=self.setupSerialComm(
+            COMport=self.main_window.selectedCOMPort,
+            baudRate=115200,
+            timeOut=10
+            
+        )
+        if targetArduino == None:
+            return
+        else:
+            self.Arduinohandshakeflag=self.Arduinohandshake()
+            if self.Arduinohandshakeflag == 1:
+                self.bootloader()
+                print("exit")
+                sys.exit()
+    
+    
+        
 
-   
+    def bootloader(self):
+        while 1:
+            self.communicationOkayFlag = 0
+
+            if self.Arduinohandshakeflag == 1:
+                self.targetArduino.flushInput()
+                startTimeForVCUhandshake = time.time() 
+                  
+                while (1):
+                    try:
+                        
+                        if ((time.time() - startTimeForVCUhandshake) < 60): #Check for VCU availability for 60 seconds
+                            arduinoResponse = targetArduino.read(size=10)
+                            if arduinoResponse != b'':                              
+                                if arduinoResponse[0] == 0x51 and arduinoResponse[1] == 0x08:
+                                    QMessageBox.information(self,"Mew bootloader detected!\n", "Mew bootloader detected!\n")
+                                    print("Mew bootloader detected!\n")
+                                    break                          
+                        else:
+                            bootloader_box = QMessageBox(self)
+                            bootloader_box.setIcon(QMessageBox.Warning)
+                            bootloader_box.setWindowTitle("Bootloader Error")
+                            bootloader_box.setText("Mew bootloader detection timeout!\n")
+                            try_again_button = bootloader_box.addButton("Try Again", QMessageBox.AcceptRole)
+                            exit_button = bootloader_box.addButton("Exit", QMessageBox.RejectRole)
+                            bootloader_box.exec_()
+
+                            if bootloader_box.clickedButton() == try_again_button:
+                                bootloader_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
+                                startTimeForVCUhandshake = time.time()
+                                continue  # Try again
+                                
+                            else:
+                                bootloader_box.done(QMessageBox.RejectRole)
+                                self.main_window.close()
+                                return None  # Exit the method or handle the case as needed
+
+                    except Exception as error:
+                        QMessageBox.information(self, "Error in  connection ","Arduino connection problem. Please restart utility.")   
+                        time.sleep(2)
+                        self.main_window.close()
+                        sys.exit()
+                try:
+                    startAddressBytes = programMemoryStartAddress.to_bytes(4, byteorder='big', signed=False)
+                    vcuInitList = [0x50, 0x08, 0xB0, 0x00, 0x00, 0x00]
+                    writtenBytes = self.sendArduinoCANframe(self.targetArduino, vcuInitList, startAddressBytes)
+                   
+                    executionStartAddressBytes = programExecutionStartAddress.to_bytes(4, byteorder='big', signed=False)
+                    vcuInitList = [0x50, 0x08, 0xB0, 0x00, 0x00, 0x00]
+                    writtenBytes = self.sendArduinoCANframe(self.targetArduino, vcuInitList, executionStartAddressBytes)
+                    numberOfDataSegmentsBytes = numberOfDataSegments.to_bytes(2, byteorder='big', signed=False)
+                    totalSizeBytes = totalSize.to_bytes(4, byteorder='big', signed=False)
+                    vcuInitList = [0x50, 0x08, 0xB0, 0x00]
+                    writtenBytes = self.sendArduinoCANframe(self.targetArduino, vcuInitList, numberOfDataSegmentsBytes, totalSizeBytes)
+
+                    self.arduinoResponse = self.targetArduino.read(size=10)
+                    print(arduinoResponse) 
+                    print(self.arduinoResponse)
+                    if self.arduinoResponse != b'':
+                        print(self.arduinoResponse[0],self.arduinoResponse[3])
+                        if self.arduinoResponse[0] == 0x51 and self.arduinoResponse[3] == 0x01:
+                            self.communicationOkayFlag = 1
+                            print("\nMew handshake successful!  Uploading firmware.\nNumber of memory segments in hex file: " + str(numberOfDataSegments) + "\n\n")
+                        elif arduinoResponse[0] == 0x51 and arduinoResponse[3] == 0x10:
+
+                            self.communicationOkayFlag = 0
+                    else:
+                        print("Mew handshake timeout! Please restart the utility.")
+                        time.sleep(10)
+                        exit()
+
+                except Exception as error:
+                        print("Arduino connection problem. Please restart utility.")
+                        time.sleep(10)
+                        exit()
+                
+                if self.communicationOkayFlag != 1:
+                    print("Mew denied communication! Please restart the utility.")
+                    time.sleep(10)
+                    exit()
+
+    def sendArduinoCANframe(self,targetArduino = [], listOfBytes = [], byteFrame1 = [], byteFrame2 = []):
+        writtenBytes = 0
+        if listOfBytes != []:
+            for byteIndex in range(len(listOfBytes)):
+                writtenBytes = writtenBytes + targetArduino.write(listOfBytes[byteIndex].to_bytes(1, byteorder='big'))
+        if byteFrame1 != []:
+            for byte in byteFrame1:
+                writtenBytes = writtenBytes +targetArduino.write(byte.to_bytes(1, byteorder='big'))
+        if byteFrame2 != []:
+            for byte in byteFrame2:
+                writtenBytes = writtenBytes +targetArduino.write(byte.to_bytes(1, byteorder='big'))
+
+        time.sleep(0.01)
+
+        return writtenBytes
+                    
+                        
+                
+                        
+                           
     def setupSerialComm(self, COMport, baudRate, timeOut):
         """Setup serial communication"""
-        while True:
+        while 1:
             try:
-                targetArduino = serial.Serial(
-                    COMport, baudRate, timeout=timeOut, write_timeout=timeOut, bytesize=serial.EIGHTBITS,
-                    parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE
-                )
+                targetArduino = serial.Serial(COMport, baudRate, timeout=timeOut, write_timeout=timeOut, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE)
+                
                 return targetArduino
+                
             except Exception as error:
                 error_message = f"Oops! Trouble initiating communication with Arduino.\n"
                 error_message += f"Make sure Arduino is connected to the same COM-port that you mentioned.\n"
                 error_message += f"Error: {str(error)}"
+
                 message_box = QMessageBox(self)
                 message_box.setIcon(QMessageBox.Warning)
                 message_box.setWindowTitle("Serial Communication Error")
                 message_box.setText(error_message)
-                message_box.addButton("Try Again", QMessageBox.AcceptRole)
-                message_box.addButton("Exit", QMessageBox.RejectRole)
-                
-                result = message_box.exec_()
-                message_box.close()
-                
-                if result == QMessageBox.AcceptRole:
-                    self.main_window.activateWindow(1)  # Try again
-                    
+                try_again_button = message_box.addButton("Try Again", QMessageBox.AcceptRole)
+                exit_button = message_box.addButton("Exit", QMessageBox.RejectRole)
+                message_box.exec_()
 
+                if message_box.clickedButton() == try_again_button:
+                    message_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
+                    self.main_window.comPortSelectionClicked()  # Try again
+                    
                 else:
+                    message_box.done(QMessageBox.RejectRole)
+                    self.main_window.close()
                     return None  # Exit the method or handle the case as needed
+                
             break
-     
+    
+
+
+    def Arduinohandshake(self):
+        arduinoHandshakeFlag = 0
+        arduinoHandshakeList = [0x0B, 0xA0]
+
+        while 1: #Arduino handshake loop            
+            time.sleep(3)
+            startTimeForArduinoHandshake = time.time()
+            while ((time.time() - startTimeForArduinoHandshake) < 30):
+                try:
+                    self.targetArduino.write(arduinoHandshakeList[0].to_bytes(1, byteorder='big'))               
+                except Exception as error:
+                    break
+                arduinoResponse = self.targetArduino.read(size=1)
+                if arduinoResponse == b'\xB0':
+                    self.targetArduino.write(arduinoHandshakeList[1].to_bytes(1, byteorder='big'))
+                    arduinoResponse = self.targetArduino.read(size=1)
+                    if arduinoResponse == b'\x0A':
+                        QMessageBox.information(self,"Arduino handshake successful", "Arduino handshake successful!")
+                        print("\nArduino Handshake successful!\n")
+                        arduinoHandshakeFlag = 1
+                        break
+            if arduinoHandshakeFlag == 1:
+                return arduinoHandshakeFlag
+                
+            else:
+                self.targetArduino.close()
+                # QMessageBox.information(self,"Arduino handshake unsuccessful", "Arduino handshake unsuccessful!")
+                error_message="\nArduino Handshake unsuccessful!\n"
+                print("\nArduino Handshake unsuccessful!\n")
+                Handshake_box = QMessageBox(self)
+                Handshake_box.setIcon(QMessageBox.Warning)
+                Handshake_box.setWindowTitle("Serial Communication Error")
+                Handshake_box.setText(error_message)
+                try_again_button = Handshake_box.addButton("Try Again", QMessageBox.AcceptRole)
+                exit_button = Handshake_box.addButton("Exit", QMessageBox.RejectRole)
+                Handshake_box.exec_()
+
+                if Handshake_box.clickedButton() == try_again_button:
+                    Handshake_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
+                    continue # Try again
+                    
+                else:
+                    Handshake_box.done(QMessageBox.RejectRole)
+                    self.main_window.close()
+                    return None  # Exit the method or handle the case as needed
+            
 
     def goBack(self):
         self.main_window.activateWindow(1)  # Go back to Hex File Selection window
@@ -421,80 +583,21 @@ class MainWindow(QWidget):
 
 
 
-# if __name__ == '__main__':
-app = QApplication(sys.argv)
-pixmap = QPixmap(64, 64)  # Set the size of the pixmap
-pixmap.fill(Qt.white)  # Set the background color to white
-painter = QPainter(pixmap)
-font = QFont("Arial", 40, QFont.Bold)
-font.setItalic(True)  # Set font style to italic
-painter.setFont(font)
-painter.setPen(QColor(Qt.red))  # Set text color to red
-painter.drawText(pixmap.rect(), Qt.AlignCenter, "B")  # Replace "B" with the desired letter
-painter.end()
-icon = QIcon(pixmap)
-app.setWindowIcon(icon)
-mainWindow = MainWindow()
-mainWindow.show()
-app.exec_()
-print("\n\nWelcome to Mew utility.\n")
-while 1:
-    HexFileName = mainWindow.selectedHexFile
-    # print("Selected HEX file:", HexFileName)
-    #hexFileRawData = open(HexFileName, 'r')
-    HexFileData = IntelHex()
-    
-    HexFileData.fromfile(HexFileName,format='hex')
-    HexPyDictionary = HexFileData.todict()
-    
-    programMemoryStartAddress = HexFileData.minaddr()
-    
-    totalSize = HexFileData.maxaddr() - HexFileData.minaddr() +1
-    programExecutionStartAddress = HexFileData.start_addr['EIP']
-    segmentList = HexFileData.segments()
-    numberOfDataSegments = len(segmentList)
-
-
-    arduinoHandshakeFlag = 0
-    arduinoHandshakeList = [0x0B, 0xA0]
-    while 1: #Arduino handshake loop
-        COMport = mainWindow.selectedCOMPort
-        targetArduino =mainWindow.serialArduino
-        time.sleep(3)
-        startTimeForArduinoHandshake = time.time()
-        # print(startTimeForArduinoHandshake)
-        while((time.time() - startTimeForArduinoHandshake) < 30):
-            try:
-                targetArduino.write(arduinoHandshakeList[0].to_bytes(1, byteorder='big'))
-            except Exception as error:
-                break
-            arduinoResponse = targetArduino.read(size=1)
-            if arduinoResponse == b'\xB0':
-                targetArduino.write(arduinoHandshakeList[1].to_bytes(1, byteorder='big'))
-                arduinoResponse = targetArduino.read(size=1)
-                if arduinoResponse == b'\x0A':
-                    print("\nArduino Handshake successful!\n")
-                    arduinoHandshakeFlag = 1
-                    break
-        if arduinoHandshakeFlag == 1:
-            break
-        else:
-            targetArduino.close()
-            print("\nArduino Handshake unsuccessful!\n")
-            userChoice = int(input("Do you want to \n1> Try again or 2> Exit? "))
-            if userChoice == 1:
-                continue
-            else:
-                exit()
-
-
-    communicationOkayFlag = 0
-
-    break
-print("END")
-
-
-
-
-
-
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    pixmap = QPixmap(64, 64)  # Set the size of the pixmap
+    pixmap.fill(Qt.white)  # Set the background color to white
+    painter = QPainter(pixmap)
+    font = QFont("Arial", 40, QFont.Bold)
+    font.setItalic(True)  # Set font style to italic
+    painter.setFont(font)
+    painter.setPen(QColor(Qt.red))  # Set text color to red
+    painter.drawText(pixmap.rect(), Qt.AlignCenter, "B")  # Replace "B" with the desired letter
+    painter.end()
+    icon = QIcon(pixmap)
+    app.setWindowIcon(icon)
+    # hexWindow=HexFileSelectionWindow()
+    mainWindow = MainWindow()
+    mainWindow.show()
+    sys.exit(app.exec_())
+    # print("\n\nWelcome to Mew utility.\n")
