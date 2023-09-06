@@ -14,7 +14,6 @@ from intelhex import IntelHex
 class HexFileSelectionWindow(QWidget):
     def __init__(self, main_window):
         super().__init__()
-
         self.main_window = main_window
         self.initUI()
 
@@ -277,12 +276,7 @@ class HandshakeWindow(QWidget):
         self.handshakeInProgressLabel.setFixedSize(250, 30)  # Set the size as desired
         self.handshakeInProgressLabel.setVisible(False)  # Initially, hide the label
         buttonLayout.addWidget(self.handshakeInProgressLabel)
-
-        
-        
-
         mainLayout.addLayout(buttonLayout)
-
         self.setLayout(mainLayout)
 
         
@@ -440,7 +434,6 @@ class HandshakeWindow(QWidget):
                 writtenBytes = writtenBytes + targetArduino.write(byte.to_bytes(1, byteorder='big'))
 
         time.sleep(0.01)
-
         return writtenBytes
 
     def Arduinohandshake(self):
@@ -639,17 +632,13 @@ class Frimware_updateWindow(QWidget):
             print("\nFirmware flashing unsuccessful! Please restart the utility.\n")
             time.sleep(5)
             self.main_window.close()
-            
-
-    
+              
     def updateStatusLabel(self, message):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         formatted_message = f"<p style='text-align:justify;'>[{timestamp}] {message}</p>"
         current_text = self.segmentStatusLabel.text()
         updated_text = f"{current_text}{formatted_message}"
         self.segmentStatusLabel.setText(updated_text)
-
-
 
 class MainWindow(QWidget):
     def __init__(self):
