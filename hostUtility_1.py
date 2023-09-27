@@ -1,5 +1,6 @@
 from intelhex import IntelHex
 import os.path
+import math
 from os import listdir
 
 # Import serial library for communication with Arduino
@@ -49,15 +50,13 @@ def Arduinohandshake(targetArduino):
     arduinoHandshakeFlag = 0
     arduinoHandshakeList = [0x0B, 0xA0]
     message = ""
-    while True:  # Arduino handshake loop
-        time.sleep(3)
+    while 1:  # Arduino handshake loop
         startTimeForArduinoHandshake = time.time()
-
         while (time.time() - startTimeForArduinoHandshake) < 30:
             try:
                 targetArduino.write(arduinoHandshakeList[0].to_bytes(1, byteorder='big'))
             except Exception as error:
-                break
+                raise SerialConnectionError (str(error))
             arduinoResponse = targetArduino.read(size=1)
 
             if arduinoResponse == b'\xB0':
@@ -67,15 +66,16 @@ def Arduinohandshake(targetArduino):
                 if arduinoResponse == b'\x0A':
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     message = f"[{timestamp}]: Arduino handshake successful! "
+
                     arduinoHandshakeFlag = 1
                     break
 
         if arduinoHandshakeFlag == 1:
             return True, message
         else:
-            targetArduino.close()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            message = f"{timestamp}: Arduino handshake unsuccessful! "
+            message = f"{timestamp}: Arduino handshake unsuccessful! 122 "
+            # message = "Arduino handshake unsuccessful!"
             return False, message
         
 def mew_detect(startTimeForVCUhandshake,targetArduino):
@@ -85,12 +85,13 @@ def mew_detect(startTimeForVCUhandshake,targetArduino):
                 arduinoResponse =targetArduino.read(size=10)
                 if arduinoResponse != b'':
                     if arduinoResponse[0] == 0x51 and arduinoResponse[1] == 0x08:
-                        msg="Mew bootloader detected!"
-                        return 1,msg
-                        break
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        message = f"[{timestamp}]: Mew bootloader detected! "
+                        return 1,message
             else:
-                msg="Mew bootloader detection timeout!"
-                return 0,msg
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                message = f"[{timestamp}]: Mew bootloader detection timeout!"
+                return 0,message
         except Exception as error:
             raise SerialConnectionError ("Arduino connection problem. Please restart utility.")
 
@@ -105,7 +106,7 @@ def mew_Handshake(selectedHexFile,targetArduino):
     programExecutionStartAddress = HexFileData.start_addr['EIP']
     segmentList = HexFileData.segments()
     numberOfDataSegments = len(segmentList)
-    communicationOkayFlag = 0
+    communicationOkayFlag = 0 
 
     try:
         startAddressBytes = programMemoryStartAddress.to_bytes(4, byteorder='big', signed=False)
@@ -127,13 +128,15 @@ def mew_Handshake(selectedHexFile,targetArduino):
                 return communicationOkayFlag,numberOfDataSegments
             elif arduinoResponse[0] == 0x51 and arduinoResponse[3] == 0x10:
                 communicationOkayFlag=0
-                return communicationOkayFlag
+                return communicationOkayFlag,None
         else:
-            communicationOkayFlag=None
-            return communicationOkayFlag
-        
+            return communicationOkayFlag,numberOfDataSegments
+
+        # return arduinoResponse,numberOfDataSegments
     except Exception as error:
         raise SerialConnectionError(error)
+
+
 
 
 def flashFirmware(numberOfSegments,segment,HexPyDictionary, targetArduino,firmwareFlashedSuccessfully ):
