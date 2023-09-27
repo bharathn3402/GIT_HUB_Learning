@@ -1,6 +1,5 @@
 from intelhex import IntelHex
 import os.path
-import math
 from os import listdir
 
 # Import serial library for communication with Arduino
@@ -106,7 +105,7 @@ def mew_Handshake(selectedHexFile,targetArduino):
     programExecutionStartAddress = HexFileData.start_addr['EIP']
     segmentList = HexFileData.segments()
     numberOfDataSegments = len(segmentList)
-    communicationOkayFlag = 0 
+    communicationOkayFlag = 0
 
     try:
         startAddressBytes = programMemoryStartAddress.to_bytes(4, byteorder='big', signed=False)
@@ -132,12 +131,9 @@ def mew_Handshake(selectedHexFile,targetArduino):
         else:
             communicationOkayFlag=None
             return communicationOkayFlag
-
-        # return arduinoResponse,numberOfDataSegments
+        
     except Exception as error:
         raise SerialConnectionError(error)
-
-
 
 
 def flashFirmware(numberOfSegments,segment,HexPyDictionary, targetArduino,firmwareFlashedSuccessfully ):
@@ -199,102 +195,3 @@ def flashFirmware(numberOfSegments,segment,HexPyDictionary, targetArduino,firmwa
     else:
         return None
 
-
-
-def calculateChecksum(segment):
-    segmentStartAddress = segment[0]
-    segmentEndAddress = segment[1] - 1
-    segmentMemory = segmentEndAddress - segmentStartAddress + 1
-
-    segmentCheckSum = 0
-    for byteAddress in range(segmentStartAddress, segmentEndAddress + 1, 4):
-        tempSum = 0
-        if (segmentEndAddress - byteAddress) >= 3:
-            tempSum = (
-                (HexPyDictionary[byteAddress] << 24)
-                | (HexPyDictionary[byteAddress + 1] << 16)
-                | (HexPyDictionary[byteAddress + 2] << 8)
-                | (HexPyDictionary[byteAddress + 3])
-            )
-        else:
-            shiftBits = 24
-            for index in range(byteAddress, segmentEndAddress + 1):
-                tempSum = tempSum | (HexPyDictionary[index] << (shiftBits))
-                shiftBits = shiftBits - 8
-
-            for index in range(0, 3 - (segmentEndAddress - byteAddress)):
-                tempSum = tempSum | (0xFF << (shiftBits))
-                shiftBits = shiftBits - 8
-
-        if (segmentCheckSum + tempSum) > 0xFFFFFFFF:
-            segmentCheckSum = tempSum - (1 + 0xFFFFFFFF - segmentCheckSum)
-        else:
-            segmentCheckSum = segmentCheckSum + tempSum
-
-    return segmentCheckSum
-
-def validateChecksum(targetArduino, segmentList, segmentIndex):
-    segment = segmentList[segmentIndex]
-    segmentStartAddress = segment[0]
-    segmentMemory = segment[1] - segment[0]
-
-    segmentCheckSum = calculateChecksum(segment)
-
-    CANdataBytes = [0x50, 0x08, 0xB0, 0x00]
-    CANdataBytes += [0x01 | ((segmentIndex + 1) << 4)] + [0x00]
-    segmentStartAddressBytes = segmentStartAddress.to_bytes(
-        4, byteorder="big", signed=False
-    )
-    writtenBytes = sendArduinoCANframe(targetArduino, CANdataBytes, segmentStartAddressBytes)
-
-    CANdataBytes = [0x50, 0x08, 0xB0, 0x00]
-    CANdataBytes += [0x02 | ((segmentIndex + 1) << 4)] + [0x00]
-    segmentMemoryBytes = segmentMemory.to_bytes(4, byteorder="big", signed=False)
-    writtenBytes = sendArduinoCANframe(targetArduino, CANdataBytes, segmentMemoryBytes)
-
-    CANdataBytes = [0x50, 0x08, 0xB0, 0x00]
-    CANdataBytes += [0x03 | ((segmentIndex + 1) << 4)] + [0x00]
-    segmentChecksumBytes = segmentCheckSum.to_bytes(4, byteorder="big", signed=False)
-    writtenBytes = sendArduinoCANframe(
-        targetArduino, CANdataBytes, segmentChecksumBytes
-    )
-
-    arduinoResponse = targetArduino.read(size=10)
-
-    if arduinoResponse == b"":
-        print("\nVCU comm. timeout!\n")
-        return False
-
-    if (
-        arduinoResponse[0] == 0x51
-        and arduinoResponse[3] == 0x02
-        and arduinoResponse[4] == (0x04 | ((segmentIndex + 1) << 4))
-    ):
-        print(
-            "\nMemory segment checksum mismatch! VCU Segment checksum: "
-            + hex(vcuSegmentChecksum)
-            + ".\n\nProceeding to flash.\n"
-        )
-        CANdataBytes = [0x50, 0x08, 0xB0, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
-        writtenBytes = sendArduinoCANframe(targetArduino, CANdataBytes)
-        return False
-
-    if (
-        arduinoResponse[0] == 0x51
-        and arduinoResponse[3] == 0x01
-        and arduinoResponse[4] == (0x04 | ((segmentIndex + 1) << 4))
-    ):
-        print("Memory segment checksum identical.\n")
-        return True
-
-    return False
-
-# for index, segment in enumerate(reversed(segmentList)):
-#     try:
-#         if validateChecksum(targetArduino, segmentList, index):
-#             print(str(index + 1) + ": Segment written successfully.\n")
-#         else:
-#             break
-#     except Exception as error:
-#         firmwareFlashedSuccessfully = False
-#         communicationOkayFlag = 0
