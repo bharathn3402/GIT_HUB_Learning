@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QStackedWidget, QPushButton, QComboBox, QLabel, QMessageBox, QFormLayout, QSizePolicy, QSpacerItem
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QStackedWidget, QPushButton, QComboBox, QLabel, QMessageBox, QFormLayout, QSizePolicy, QSpacerItem,QScrollArea,QTextEdit,QTextBrowser,QFrame
 from PyQt5.QtGui import QFont,QIcon,QPixmap,QPainter, QColor
 from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import sys
-from datetime import datetime
 import hostUtility_1
 import time
 from intelhex import IntelHex
@@ -55,9 +55,13 @@ class HexFileSelectionWindow(QWidget):
         if len(hexFiles) == 0:
             QMessageBox.warning(self, "No HEX Files", "No HEX files found in the current directory.")
         else:
+            # self.fileComboBox.clear()
+            # self.fileComboBox.setPlaceholderText("Select a HEX file")
+            # self.fileComboBox.addItems(hexFiles)
             self.fileComboBox.clear()
-            self.fileComboBox.setPlaceholderText("Select a HEX file")
             self.fileComboBox.addItems(hexFiles)
+            self.fileComboBox.setPlaceholderText("Select a HEX file")  # Set placeholder text here
+
 
     def refreshHexFiles(self):
         self.populateHexFiles()
@@ -131,7 +135,13 @@ class COMPortSelectionWindow(QWidget):
 
         mainLayout.addLayout(buttonLayout)
 
+        # Add one line of space after the buttons
+        spaceLabel = QLabel()
+        spaceLabel.setFixedHeight(20)  # Adjust the height as needed
+        mainLayout.addWidget(spaceLabel)
+
         self.setLayout(mainLayout)
+
 
     def populateCOMPorts(self):
         self.comComboBox.clear()
@@ -156,11 +166,11 @@ class COMPortSelectionWindow(QWidget):
         self.main_window.selectedCOMPort = selectedPort  # Store the selected COM port
 
     def goBack(self):
-        self.main_window.selectedCOMPort = ""  # Reset the selected COM port
-        self.main_window.hexFileSelectionWindow.fileComboBox.setCurrentIndex(-1)  # Clear the selected hex file
-        self.main_window.hexFileSelectionWindow.fileComboBox.clear()  # Clear the combo box items
-        self.main_window.hexFileSelectionWindow.populateHexFiles()  # Repopulate HEX files
-        self.main_window.activateWindow(0)  # Go back to Hex File Selection window
+        self.main_window.selectedCOMPort = "" 
+        self.main_window.hexFileSelectionWindow.fileComboBox.setCurrentIndex(-1)  
+        self.main_window.hexFileSelectionWindow.fileComboBox.clear() 
+        self.main_window.hexFileSelectionWindow.populateHexFiles() 
+        self.main_window.activateWindow(0)  
 
 
     def refreshCOMPorts(self):
@@ -209,11 +219,13 @@ class COMPortSelectionWindow(QWidget):
                     self.main_window.close()
                     return None  # Exit the method or handle the case as needed
 
+
 class HandshakeWindow(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         self.initUI()
+
     def initUI(self):
         mainLayout = QVBoxLayout()
         formLayout = QFormLayout()
@@ -230,92 +242,65 @@ class HandshakeWindow(QWidget):
         self.baudRatevalueLabel = QLabel("115200")
         formLayout.addRow(baudRateLabel, self.baudRatevalueLabel)
 
-        self.handshakeStatusLabel = QLabel()
-        self.handshakeStatusLabel.setWordWrap(True)  # Enable multiline display
+        self.handshakeStatusLabel = QTextBrowser()  # Use QTextBrowser for scrollable text
+        self.handshakeStatusLabel.setReadOnly(True)
+        self.handshakeStatusLabel.setOpenExternalLinks(True)  # Enable hyperlink clicking
         formLayout.addRow("Handshake Status:", self.handshakeStatusLabel)
 
         mainLayout.addLayout(formLayout)
 
-        buttonLayout = QHBoxLayout()
+        buttonLayout = QVBoxLayout()
 
-        # Create a layout to hold the "Click here" button and message label in the same line
-        messageButtonLayout = QHBoxLayout()
         self.messageLabel = QLabel("Please click on 'Click here' to start handshake ....")
         self.messageLabel.setStyleSheet("font-size: 14px; font-weight;")
-        self.messageLabel.setFixedSize(300, 30)  # Set the size as desired
-        messageButtonLayout.addWidget(self.messageLabel, alignment=Qt.AlignCenter)  # Center-align vertically
+        self.messageLabel.setAlignment(Qt.AlignCenter)
+        buttonLayout.addWidget(self.messageLabel, alignment=Qt.AlignCenter)
 
+        buttonRowLayout = QVBoxLayout()
         self.clickButton = QPushButton("Click here")
         self.clickButton.setFont(QFont("Arial", 10, QFont.Bold))
         self.clickButton.setStyleSheet("background-color: #3f51b5; color: white; text-align: Center;")
-        self.clickButton.setFixedSize(100, 30)  # Adjust the size as desired
+        self.clickButton.setFixedSize(100, 30)
         self.clickButton.clicked.connect(self.handshake)
-        messageButtonLayout.addWidget(self.clickButton, alignment=Qt.AlignCenter)  # Center-align vertically
+        buttonRowLayout.addWidget(self.clickButton, alignment=Qt.AlignCenter)
+        buttonLayout.addLayout(buttonRowLayout)
 
-        # Add spacer to center the "Click here" button
-        messageButtonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
-
-        buttonLayout.addLayout(messageButtonLayout)
         self.arduinohandshakeLabel = QLabel(" please wait Arduino Handshake is in progress...")
         self.arduinohandshakeLabel.setStyleSheet("font-size: 14px; font-weight;")
-        self.arduinohandshakeLabel.setFixedSize(300, 30)  # Set the size as desired
-        self.arduinohandshakeLabel.setVisible(False)  # Initially, hide the label
-        buttonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        self.arduinohandshakeLabel.setFixedSize(300, 30)
+        self.arduinohandshakeLabel.setVisible(False)
+        buttonLayout.addWidget(self.arduinohandshakeLabel, alignment=Qt.AlignCenter)
 
-        buttonLayout.addWidget(self.arduinohandshakeLabel, alignment=Qt.AlignCenter)  # Center-align vertically
-        buttonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
-       
         self.handshakeInProgressLabel = QLabel("MEW Handshake in progress please wait...")
         self.handshakeInProgressLabel.setStyleSheet("font-size: 14px; font-weight;")
-        self.handshakeInProgressLabel.setFixedSize(250, 30)  # Set the size as desired
-        self.handshakeInProgressLabel.setVisible(False)  # Initially, hide the label
-        buttonLayout.addWidget(self.handshakeInProgressLabel, alignment=Qt.AlignVCenter)  # Center-align vertically
+        self.handshakeInProgressLabel.setFixedSize(250, 30)
+        self.handshakeInProgressLabel.setVisible(False)
+        buttonLayout.addWidget(self.handshakeInProgressLabel, alignment=Qt.AlignCenter)
+
+        self.powerCycleLabel = QLabel("Please give power cycle...")
+        self.powerCycleLabel.setStyleSheet("font-size: 14px; font-weight;")
+        self.powerCycleLabel.setFixedSize(250, 30)
+        self.powerCycleLabel.setVisible(False)
+        self.powerCycleLabel.setAlignment(Qt.AlignCenter)
+        buttonLayout.addWidget(self.powerCycleLabel, alignment=Qt.AlignCenter)
+
         mainLayout.addLayout(buttonLayout)
         self.setLayout(mainLayout)
-
-    def Arduinohandshake(self):
-        while(1):
-            arduinoHandshakeFlag, handshake_message = hostUtility_1.Arduinohandshake(self.main_window.targetArduino)
-            if arduinoHandshakeFlag == 1:
-                self.handshakeStatusLabel.setText(handshake_message)  # Set the handshake message label
-                QMessageBox.information(self,"Arduino handshake successful", "Arduino handshake successful!")
-                return arduinoHandshakeFlag
-            else:
-                self.handshakeStatusLabel.setText(handshake_message)  # Set the handshake message label
-                error_message="Arduino Handshake unsuccessful!"
-                Handshake_box = QMessageBox(self)
-                Handshake_box.setIcon(QMessageBox.Warning)
-                Handshake_box.setWindowTitle("Serial Communication Error")
-                Handshake_box.setText(error_message)
-                try_again_button = Handshake_box.addButton("Try Again", QMessageBox.AcceptRole)
-                exit_button = Handshake_box.addButton("Exit", QMessageBox.RejectRole)
-                Handshake_box.exec_()
-
-                if Handshake_box.clickedButton() == try_again_button:
-                    Handshake_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
-                    continue # Try again
-                    
-                else:
-                    Handshake_box.done(QMessageBox.RejectRole)
-                    self.main_window.close()
-                    return None  # Exit the method or handle the case as needed
 
     def handshake(self):
         self.messageLabel.setVisible(False)
         self.clickButton.setVisible(False)
-        self.messageButtonLayout.removeWidget(self.messageLabel)
-        self.clickButton.deleteLater()
+        # self.clickButton.deleteLater()
         QApplication.processEvents()
-        
+
         self.arduinohandshakeLabel.setVisible(True)
         QApplication.processEvents()
         self.arduinoHandshakeflag = self.Arduinohandshake()
         self.main_window.communicationOkayFlag = 0
 
         if self.arduinoHandshakeflag == 1:
-            
             self.arduinohandshakeLabel.setVisible(False)
-            self.handshakeInProgressLabel.setVisible(True)
+            self.powerCycleLabel.setVisible(True)
             QApplication.processEvents()
             self.main_window.targetArduino.flushInput()
             startTimeForVCUhandshake = time.time()
@@ -324,7 +309,10 @@ class HandshakeWindow(QWidget):
                 try:
                     mew_detect,message=hostUtility_1.mew_detect(startTimeForVCUhandshake,self.main_window.targetArduino)
                     if mew_detect==1:
+                        self.powerCycleLabel.setVisible(False)
+                        self.handshakeInProgressLabel.setVisible(True)
                         self.updateStatusLabel(message)
+                        QApplication.processEvents()
                         break
                     else:
                         self.updateStatusLabel(message)
@@ -351,14 +339,13 @@ class HandshakeWindow(QWidget):
             try:
                 self.main_window.communicationOkayFlag,numberOfDataSegments=hostUtility_1.mew_Handshake(self.main_window.selectedHexFile,self.main_window.targetArduino)
                 if self.main_window.communicationOkayFlag==1:
+                    handshake_message = "Mew handshake successful!"
+                    segments_message = f"Number of memory segments in hex file: {numberOfDataSegments}"
+                    self.updateStatusLabel(handshake_message)
+                    self.updateStatusLabel(segments_message)
                     message = f"Mew handshake successful!\nNumber of memory segments in hex file: {numberOfDataSegments}"
-                    self.updateStatusLabel(message)
                     QMessageBox.information(self, "Mew handshake", message)
                     self.handshakeInProgressLabel.setVisible(False)
-                    # self.clickButton.hide()
-                    # self.layout().removeWidget(self.clickButton)
-                    # self.clickButton.deleteLater()
-                    # # self.uploadInProgressLabel.setVisible(True)  # Initially, hide the label
 
                     buttonLayout = QHBoxLayout()
                     buttonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
@@ -396,17 +383,44 @@ class HandshakeWindow(QWidget):
                 QMessageBox.information(self, " connection problem", message)
                 time.sleep(1)
                 self.main_window.close()
+    
+    def Arduinohandshake(self):
+        while(1):
+            QApplication.processEvents()
+            arduinoHandshakeFlag, handshake_message = hostUtility_1.Arduinohandshake(self.main_window.targetArduino)
+            if arduinoHandshakeFlag == 1:
+                self.handshakeStatusLabel.setText(handshake_message)  # Set the handshake message label
+                QMessageBox.information(self,"Arduino handshake successful", "Arduino handshake successful!")
+                return arduinoHandshakeFlag
+            else:
+                self.handshakeStatusLabel.setText(handshake_message)  # Set the handshake message label
+                error_message="Arduino Handshake unsuccessful!"
+                Handshake_box = QMessageBox(self)
+                Handshake_box.setIcon(QMessageBox.Warning)
+                Handshake_box.setWindowTitle("Serial Communication Error")
+                Handshake_box.setText(error_message)
+                try_again_button = Handshake_box.addButton("Try Again", QMessageBox.AcceptRole)
+                exit_button = Handshake_box.addButton("Exit", QMessageBox.RejectRole)
+                Handshake_box.exec_()
+
+                if Handshake_box.clickedButton() == try_again_button:
+                    Handshake_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
+                    continue # Try again
+                    
+                else:
+                    Handshake_box.done(QMessageBox.RejectRole)
+                    self.main_window.close()
+                    return None  # Exit the method or handle the case as needed
 
     def updateStatusLabel(self, message):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        formatted_message = f"<p style='text-align:justify;'>[{timestamp}] {message}</p>"
-        current_text = self.handshakeStatusLabel.text()
-        updated_text = f"{current_text}{formatted_message}"
-        self.handshakeStatusLabel.setText(updated_text)
+        formatted_message = f"<p style='text-align:justify; font-size: 14px;'>[{timestamp}] {message}</p>"
+        self.handshakeStatusLabel.append(formatted_message)
 
-    
+
     def move_ToNextWindow(self):
-        self.main_window.activateWindow(3)  # Go to Serial Setup window
+        self.main_window.activateWindow(3)
+        
 
 
 class Frimware_updateWindow(QWidget):
@@ -417,27 +431,51 @@ class Frimware_updateWindow(QWidget):
 
     def initUI(self):
         mainLayout = QVBoxLayout()
-        formlayout = QFormLayout()
+        self.segmentStatusLabel = QLabel("<b><font size='5'>Uploading&nbsp;Firmware:</font></b>")
+        self.segmentStatusLabel.setWordWrap(True)
+        mainLayout.addWidget(self.segmentStatusLabel, alignment=Qt.AlignLeft)
 
-        self.segmentStatusLabel = QLabel()
-        self.segmentStatusLabel.setWordWrap(True)  # Enable multiline display
-        formlayout.addRow("Uploading frimware", self.segmentStatusLabel)
-        mainLayout.addLayout(formlayout)
+        # Create a scroll area for firmware update status
+        scrollArea = QScrollArea()
+        scrollArea.setWidgetResizable(True)
+        scrollArea.setFrameShape(QFrame.NoFrame)  # Remove the frame around the scroll area
+        contentWidget = QWidget()
 
+        # Create a QTextBrowser for firmware update status
+        self.firmwareStatusLabel = QTextBrowser()
+        self.firmwareStatusLabel.setReadOnly(True)
 
+        contentLayout = QVBoxLayout()
+        contentLayout.addWidget(self.firmwareStatusLabel)
+        contentWidget.setLayout(contentLayout)
+
+        scrollArea.setWidget(contentWidget)
+        mainLayout.addWidget(scrollArea)
+
+        # Message label aligned to the center
+        self.messageLabel = QLabel("Please click on 'Upload' to start uploading firmware...")
+        self.messageLabel.setStyleSheet("font-size: 14px; font-weight;")
+        mainLayout.addWidget(self.messageLabel, alignment=Qt.AlignCenter)
+
+        # Upload button aligned to the center
         buttonLayout = QHBoxLayout()
-        buttonLayout.addStretch() # Add stretch before the button to center it
-        doneButton = QPushButton("Upload")
-        doneButton.setFont(QFont("Arial", 10, QFont.Bold))
-        doneButton.setStyleSheet("background-color: #4CAF50; color: white; text-align: center;")
-        doneButton.setFixedSize(100, 30)
-        doneButton.clicked.connect(self.flashFirmware)
-        buttonLayout.addWidget(doneButton)
-        buttonLayout.addStretch()  # Add stretch after the button to center it
+        buttonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        self.uploadButton = QPushButton("Upload")
+        self.uploadButton.setFont(QFont("Arial", 10, QFont.Bold))
+        self.uploadButton.setStyleSheet("background-color: #4CAF50; color: white; text-align: center;")
+        self.uploadButton.setFixedSize(100, 30)
+        self.uploadButton.clicked.connect(self.flashfrimware)
+        buttonLayout.addWidget(self.uploadButton, alignment=Qt.AlignCenter)
+        buttonLayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         mainLayout.addLayout(buttonLayout)
+
         self.setLayout(mainLayout)
 
-    def flashFirmware(self):
+    def flashfrimware(self):
+
+        self.messageLabel.setVisible(False)
+        self.uploadButton.setVisible(False)
+        QApplication.processEvents()
         HexFileName = self.main_window.selectedHexFile
         HexFileData = IntelHex()
         HexFileData.fromfile(HexFileName, format='hex')
@@ -448,19 +486,44 @@ class Frimware_updateWindow(QWidget):
         firmwareFlashedSuccessfully = True
         try:
             for segment in reversed(segmentList):
-                firmwareFlashedSuccessfully,message,numberOfSegments=hostUtility_1.flashFirmware(numberOfSegments,segment,HexPyDictionary,self.main_window.targetArduino,firmwareFlashedSuccessfully)
-                numberOfSegments=numberOfSegments
+                firmwareFlashedSuccessfully, message, numberOfSegments = hostUtility_1.flashFirmware(
+                    numberOfSegments, segment, HexPyDictionary, self.main_window.targetArduino, firmwareFlashedSuccessfully)
+                numberOfSegments = numberOfSegments
                 if firmwareFlashedSuccessfully:
                     message = f"{numberOfSegments}: Segment written successfully."
                     self.updateStatusLabel(message)
                     QApplication.processEvents()  # Force the GUI to update
                     continue
                 else:
-                    QMessageBox.information(self,"VCU communication!",message)
+                    QMessageBox.information(self, "VCU communication!", message)
                     break
-            
+
+            if firmwareFlashedSuccessfully:
+                time.sleep(3)
+                message_box = QMessageBox(self)
+                message_box.setIcon(QMessageBox.Warning)
+                message_box.setWindowTitle("Firmware flashed successfully!")
+                message_box.setText("Do you want to flash firmware again?")
+                yes_button = message_box.addButton("Yes", QMessageBox.AcceptRole)
+                exit_button = message_box.addButton("No", QMessageBox.RejectRole)
+                message_box.exec_()
+
+                if message_box.clickedButton() == yes_button:
+                    message_box.done(QMessageBox.AcceptRole)
+                    self.main_window.restart_application()
+
+                else:
+                    message_box.done(QMessageBox.RejectRole)
+                    self.main_window.close()
+                    return None  # Exit the method or handle the case as needed
+            else:
+                QMessageBox.information(self, "Flashing error", "Firmware flashing unsuccessful! Please restart the utility.")
+                time.sleep(3)
+                self.main_window.close()
         except hostUtility_1.SerialConnectionError as error:
-            message=str(error)
+            message = str(error)
+            self.updateStatusLabel(message)
+            QApplication.processEvents()
             message_box = QMessageBox(self)
             message_box.setIcon(QMessageBox.Warning)
             message_box.setWindowTitle("VCU communication error!")
@@ -471,55 +534,50 @@ class Frimware_updateWindow(QWidget):
 
             if message_box.clickedButton() == yes_button:
                 message_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
-                self.main_window.targetArduino.close()
-                Frimware_updateWindow.move_to_nextWindow(self)
-                return
+                self.main_window.restart_application()
+                # self.main_window.targetArduino.close()
+                # self.move_ToNextWindow()
+                # return
             else:
                 message_box.done(QMessageBox.RejectRole)
                 self.main_window.close()
                 return None
 
-        if firmwareFlashedSuccessfully:
-            time.sleep(3)
-            message_box = QMessageBox(self)
-            message_box.setIcon(QMessageBox.Warning)
-            message_box.setWindowTitle("Firmware flashed successfully!")
-            message_box.setText("Do you want to Flash firmware again")
-            yes_button = message_box.addButton("Yes", QMessageBox.AcceptRole)
-            exit_button = message_box.addButton("No", QMessageBox.RejectRole)
-            message_box.exec_()
-
-            if message_box.clickedButton() == yes_button:
-                message_box.done(QMessageBox.AcceptRole)  # Set the result and close the message box
-                self.main_window.targetArduino.close()
-                self.main_window.activateWindow(0)  # Try again
-                
-            else:
-                message_box.done(QMessageBox.RejectRole)
-                self.main_window.close()
-                return None  # Exit the method or handle the case as needed
-        else:
-            QMessageBox.information(self,"Flashing error","Firmware flashing unsuccessful! Please restart the utility.")
-            time.sleep(3)
-            self.main_window.close()
-    def move_to_nextWindow(self):
-        self.main_window.selectedCOMPort = ""  # Reset the selected COM port
-        self.main_window.hexFileSelectionWindow.fileComboBox.setCurrentIndex(-1)  # Clear the selected hex file
-        self.main_window.hexFileSelectionWindow.fileComboBox.clear()  # Clear the combo box items
-        self.main_window.hexFileSelectionWindow.populateHexFiles()  # Repopulate HEX files
-        self.main_window.activateWindow(0)  # Go back to Hex File Selection window
-              
     def updateStatusLabel(self, message):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        formatted_message = f"<p style='text-align:justify;'>[{timestamp}] {message}</p>"
-        current_text = self.segmentStatusLabel.text()
-        updated_text = f"{current_text}{formatted_message}"
-        self.segmentStatusLabel.setText(updated_text)
+        formatted_message = f"<p style='text-align:justify; margin-left: 50px; font-size: 14px;'>[{timestamp}] {message}</p>"
+        self.firmwareStatusLabel.append(formatted_message)
+
+        
+class HandshakeWorker(QThread):
+    finished = pyqtSignal()
+    handshake_signal = pyqtSignal(bool, str)
+
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+
+    def run(self):
+        self.main_window.handshake()
+        self.finished.emit()
+
+class FirmwareUpdateWorker(QThread):
+    finished = pyqtSignal()
+    firmware_update_signal = pyqtSignal()
+
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+
+    def run(self):
+        self.main_window.flash_firmware()
+        self.finished.emit()
+
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)  # Disable maximize button
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False) 
         self.selectedHexFile = ""
         self.selectedCOMPort = ""
         self.selectedBaudRate = ""
@@ -530,11 +588,11 @@ class MainWindow(QWidget):
 
     def initUI(self):
         self.setWindowTitle("BOSON VCU")
-        self.setGeometry(590, 340, 500, 350)  # Set the window's position and size (x, y, width, height)
+        self.setGeometry(590, 340, 500, 350)
 
         mainLayout = QVBoxLayout()
         buttonLayout = QHBoxLayout()
-        buttonLayout.setSpacing(5)  # Set the spacing between buttons
+        buttonLayout.setSpacing(5)
 
         self.hexFileSelectionButton = QPushButton("Select HEX File", self)
         self.hexFileSelectionButton.setFixedSize(115, 30)
@@ -590,7 +648,6 @@ class MainWindow(QWidget):
         elif not self.selectedCOMPort:
             self.showWarning("No COM Port Selected", "Please select a COM port first.")
         else:
-            # Set the selected baud rate (you can update this with the actual baud rate value)
             self.selectedBaudRate = "115200"
             self.activateWindow(2)
 
@@ -600,7 +657,7 @@ class MainWindow(QWidget):
         elif not self.selectedCOMPort:
             self.showWarning("No COM Port Selected", "Please select a COM port first.")
         elif not self.communicationOkayFlag:
-            self.showWarning("New handshake problem", "Please do New handshake first.")
+            self.showWarning("Mew handshake problem", "Please do Mew handshake first.")
         else:
             self.activateWindow(3)
 
@@ -631,6 +688,7 @@ class MainWindow(QWidget):
                 return
 
         self.stack.setCurrentIndex(index)
+
     
     def closeEvent(self, event):
         reply = QMessageBox.question(
@@ -640,6 +698,30 @@ class MainWindow(QWidget):
             sys.exit()
         else:
             event.ignore()
+
+    def restart_application(self):
+        self.targetArduino.close()
+        self.selectedHexFile = ""
+        self.hexFileSelectionWindow.fileComboBox.setCurrentIndex(-1)  
+        self.hexFileSelectionWindow.fileComboBox.clear() 
+        self.hexFileSelectionWindow.populateHexFiles()
+        self.selectedCOMPort = ""
+        self.comPortSelectionWindow.comComboBox.setCurrentIndex(-1)
+        self.comPortSelectionWindow.comComboBox.clear()
+        self.comPortSelectionWindow.populateCOMPorts()
+        self.selectedBaudRate = ""
+        self.targetArduino = ""
+        self.communicationOkayFlag = 0
+        self.HandshakeWindow.messageLabel.setVisible(True)
+        self.HandshakeWindow.clickButton.setVisible(True)
+        self.HandshakeWindow.arduinohandshakeLabel.setVisible(False)
+        self.HandshakeWindow.handshakeInProgressLabel.setVisible(False)
+        self.HandshakeWindow.handshakeStatusLabel.clear()  # Clear any previous messages
+        self.HandshakeWindow.startButton.setVisible(False)
+        self.Frimware_updateWindow.messageLabel.setVisible(True)
+        self.Frimware_updateWindow.uploadButton.setVisible(True)
+        self.Frimware_updateWindow.firmwareStatusLabel.clear()
+        self.activateWindow(0)
 
 
 if __name__ == '__main__':
@@ -656,6 +738,11 @@ if __name__ == '__main__':
     icon = QIcon(pixmap)
     app.setWindowIcon(icon)
     mainWindow = MainWindow()
+    handshake_worker = HandshakeWorker(mainWindow)
+    firmware_update_worker = FirmwareUpdateWorker(mainWindow)
+
+    mainWindow.handshake_worker = handshake_worker
+    mainWindow.firmware_update_worker = firmware_update_worker
     mainWindow.show()
     sys.exit(app.exec_())
     
